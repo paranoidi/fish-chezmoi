@@ -467,7 +467,12 @@ function cz
         # Only show pending section when there are actual pending files
         set -l pending (__cz_status_without_template_sources)
         if test -n "$pending"
-            echo ""
+            # Add blank line separator only when the repo summary had sections
+            # (gs=0). When clean (gs=2), __cz_git_repo_summary already emitted
+            # a blank line at line 79, so adding another would double it.
+            if test $gs -eq 0
+                echo ""
+            end
             __cz_git_repo_section_header "pending" "35"
             printf '%s\n' $pending
         end
