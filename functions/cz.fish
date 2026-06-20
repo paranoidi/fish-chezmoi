@@ -51,6 +51,28 @@ function __cz_source_dir
     chezmoi execute-template '{{ .chezmoi.sourceDir }}'
 end
 
+function __cz_is_initialized
+    set -l sd (chezmoi source-path 2>/dev/null)
+    test -n "$sd" -a -d "$sd"
+end
+
+function __cz_help_workflow_commands
+    echo -e "  cz \e[1mu\e[0mpdate           → Pull latest state + apply to \$HOME"
+    echo -e "  cz \e[1ma\e[0mdd [file]       → Add all local changes into chezmoi (excl. templates) or given file"
+    echo -e "  cz \e[1mb\e[0macktrack <file> → Restore file to chezmoi-managed state (discard local changes)"
+    echo -e "  cz \e[1ms\e[0mtatus           → Show status diff"
+    echo -e "  cz \e[1md\e[0miff             → Show detailed diff"
+    echo -e "  cz \e[1mr\e[0mecord [msg]     → Add all changes + git commit [message]"
+    echo -e "  cz \e[1mp\e[0mush             → Push commits to remote"
+    echo -e "  cz \e[1mf\e[0mull [msg]       → Full sync cycle [message]"
+    echo -e "  cz \e[1mc\e[0mlean            → Offer to remove deleted files (git deletes; renames not covered)"
+    echo -e "  cz \e[1mg\e[0mit              → cd into chezmoi source directory"
+end
+
+function __cz_help_init_command
+    echo -e "  cz \e[1mi\e[0mnit <username>  → Bootstrap chezmoi from GitHub dotfiles repo"
+end
+
 function __cz_git_repo_summary
     set -l sd (__cz_source_dir)
 
@@ -356,6 +378,10 @@ function cz
         set cmd help
     end
 
+    if test "$cmd" = -h
+        set cmd help-full
+    end
+
     switch $cmd
 
     # ------------------------------------------------------------
@@ -365,16 +391,22 @@ function cz
         echo "cz - chezmoi workflow helper"
         echo ""
         echo "Commands:"
-        echo -e "  cz \e[1mu\e[0mpdate           → Pull latest state + apply to \$HOME"
-        echo -e "  cz \e[1ma\e[0mdd [file]       → Add all local changes into chezmoi (excl. templates) or given file"
-        echo -e "  cz \e[1mb\e[0macktrack <file> → Restore file to chezmoi-managed state (discard local changes)"
-        echo -e "  cz \e[1ms\e[0mtatus           → Show status diff"
-        echo -e "  cz \e[1md\e[0miff             → Show detailed diff"
-        echo -e "  cz \e[1mr\e[0mecord [msg]     → Add all changes + git commit [message]"
-        echo -e "  cz \e[1mp\e[0mush             → Push commits to remote"
-        echo -e "  cz \e[1mf\e[0mull [msg]       → Full sync cycle [message]"
-        echo -e "  cz \e[1mc\e[0mlean            → Offer to remove deleted files (git deletes; renames not covered)"
-        echo -e "  cz \e[1mg\e[0mit              → cd into chezmoi source directory"
+        if __cz_is_initialized
+            __cz_help_workflow_commands
+        else
+            __cz_help_init_command
+        end
+        return 0
+
+    # ------------------------------------------------------------
+    # HELP FULL (-h)
+    # ------------------------------------------------------------
+    case help-full
+        echo "cz - chezmoi workflow helper"
+        echo ""
+        echo "Commands:"
+        __cz_help_workflow_commands
+        __cz_help_init_command
         return 0
 
     # ------------------------------------------------------------
@@ -568,6 +600,22 @@ function cz
     case clean c
         echo "🧹 cz clean — stale targets from git delete history"
         __cz_clean
+        return $status
+
+    # ------------------------------------------------------------
+    # INIT (bootstrap chezmoi from GitHub)
+    # ------------------------------------------------------------
+    case init i
+        set -l username $argv[2]
+
+        if test -z "$username"
+            echo "Usage: cz init <github-username>"
+            return 1
+        end
+
+        echo "🚀 cz init — bootstrapping chezmoi from github.com/$username"
+        set -l _cz_init_script (curl -fsLS https://get.chezmoi.io | string collect)
+        sh -c "$_cz_init_script" -- init --apply "$username"
         return $status
 
     # ------------------------------------------------------------
