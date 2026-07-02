@@ -352,6 +352,15 @@ function __cz_import_changes
     end
 
     for f in $files
+        # Skip directory entries (chezmoi flags dirs on mode-only diffs).
+        # Adding a dir recurses over its whole tree, sweeping in unmanaged
+        # files (e.g. protected binaries); changed files inside already
+        # appear as their own status entries.
+        if test -d "$HOME/$f"
+            echo (__cz_wide_emoji "⏭️")"$f (directory, skipped)"
+            continue
+        end
+
         set source_path (chezmoi source-path "$HOME/$f" 2>/dev/null)
         if test $status -ne 0
             echo "🚫 $f (could not resolve chezmoi source)"
