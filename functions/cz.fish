@@ -109,7 +109,7 @@ function __cz_git_repo_summary
             echo ""
         end
         set has_any 1
-        __cz_git_repo_section_header "staged" "33"
+        __cz_git_repo_section_header staged 33
         for line in $staged
             echo "$line" | string replace -r '^([^	]+)	' '$1  '
         end
@@ -122,7 +122,7 @@ function __cz_git_repo_summary
             echo ""
         end
         set has_any 1
-        __cz_git_repo_section_header "unstaged" "36"
+        __cz_git_repo_section_header unstaged 36
         for f in $modified
             echo "$f" | string replace -r '^' 'M  '
         end
@@ -135,7 +135,7 @@ function __cz_git_repo_summary
             echo ""
         end
         set has_any 1
-        __cz_git_repo_section_header "untracked" "90"
+        __cz_git_repo_section_header untracked 90
         for f in $untracked
             echo "$f" | string replace -r '^' '?  '
         end
@@ -393,246 +393,246 @@ function cz
 
     switch $cmd
 
-    # ------------------------------------------------------------
-    # HELP
-    # ------------------------------------------------------------
-    case help
-        echo "cz - chezmoi workflow helper"
-        echo ""
-        echo "Commands:"
-        if __cz_is_initialized
-            __cz_help_workflow_commands
-        else
-            __cz_help_init_command
-        end
-        return 0
-
-    # ------------------------------------------------------------
-    # HELP FULL (-h)
-    # ------------------------------------------------------------
-    case help-full
-        echo "cz - chezmoi workflow helper"
-        echo ""
-        echo "Commands:"
-        __cz_help_workflow_commands
-        __cz_help_init_command
-        return 0
-
-    # ------------------------------------------------------------
-    # UPDATE (repo → home)
-    # ------------------------------------------------------------
-    case update u
-        echo "🌐 cz update"
-
-        chezmoi update
-        chezmoi apply
-
-        for hook in (functions --all | string match '__cz_hook_update_*')
-            echo "⚓️ Hook: $hook"
-            $hook
-        end
-
-        echo "🏆 Update complete"
-        return 0
-
-    # ------------------------------------------------------------
-    # ADD (home → repo)
-    # ------------------------------------------------------------
-    case add a
-        set file $argv[2]
-
-        if test -n "$file"
-            echo "🏠 cz add - Adding $file"
-            chezmoi add "$file"
-            echo "🏆 Add complete"
-            return 0
-        end
-
-        echo "🏠 cz add - Importing local changes into chezmoi"
-
-        __cz_import_changes
-
-        # deletion handling
-        set deleted (__cz_deleted_files)
-        if test (count $deleted) -gt 0
+        # ------------------------------------------------------------
+        # HELP
+        # ------------------------------------------------------------
+        case help
+            echo "cz - chezmoi workflow helper"
             echo ""
-            echo (__cz_wide_emoji "⚠️")"Deleted files detected:"
-            for f in $deleted
-                echo "   - $f"
+            echo "Commands:"
+            if __cz_is_initialized
+                __cz_help_workflow_commands
+            else
+                __cz_help_init_command
+            end
+            return 0
+
+            # ------------------------------------------------------------
+            # HELP FULL (-h)
+            # ------------------------------------------------------------
+        case help-full
+            echo "cz - chezmoi workflow helper"
+            echo ""
+            echo "Commands:"
+            __cz_help_workflow_commands
+            __cz_help_init_command
+            return 0
+
+            # ------------------------------------------------------------
+            # UPDATE (repo → home)
+            # ------------------------------------------------------------
+        case update u
+            echo "🌐 cz update"
+
+            chezmoi update
+            chezmoi apply
+
+            for hook in (functions --all | string match '__cz_hook_*')
+                echo "⚓️ Hook: $hook"
+                $hook
             end
 
-            read -P "❓ Remove these from chezmoi source as well? [y/N] " confirm
-            if string match -q -i y -- "$confirm"
+            echo "🏆 Update complete"
+            return 0
+
+            # ------------------------------------------------------------
+            # ADD (home → repo)
+            # ------------------------------------------------------------
+        case add a
+            set file $argv[2]
+
+            if test -n "$file"
+                echo "🏠 cz add - Adding $file"
+                chezmoi add "$file"
+                echo "🏆 Add complete"
+                return 0
+            end
+
+            echo "🏠 cz add - Importing local changes into chezmoi"
+
+            __cz_import_changes
+
+            # deletion handling
+            set deleted (__cz_deleted_files)
+            if test (count $deleted) -gt 0
+                echo ""
+                echo (__cz_wide_emoji "⚠️")"Deleted files detected:"
                 for f in $deleted
-                    echo "💀 $f"
-                    chezmoi forget "$HOME/$f"
+                    echo "   - $f"
+                end
+
+                read -P "❓ Remove these from chezmoi source as well? [y/N] " confirm
+                if string match -q -i y -- "$confirm"
+                    for f in $deleted
+                        echo "💀 $f"
+                        chezmoi forget "$HOME/$f"
+                    end
                 end
             end
-        end
 
-        echo "🏆 Add complete"
-        return 0
-
-    # ------------------------------------------------------------
-    # BACKTRACK (repo → home, single file)
-    # ------------------------------------------------------------
-    case backtrack b
-        set file $argv[2]
-
-        if test -z "$file"
-            echo "Usage: cz backtrack <file>"
-            return 1
-        end
-
-        echo "⏪ cz backtrack — restoring $file"
-        chezmoi apply "$file"
-        echo "🏆 Restored"
-        return 0
-
-    # ------------------------------------------------------------
-    # STATUS
-    # ------------------------------------------------------------
-    case status s
-        echo "🏠 cz status"
-        __cz_git_repo_summary
-        set -l gs $status
-        switch $gs
-        case 0
-        case 2
-            # clean — no separator needed before pending heading
-        case 1
-            return 1
-        case '*'
-            return $gs
-        end
-        # Only show pending section when there are actual pending files
-        set -l pending (__cz_status_without_template_sources)
-        if test -n "$pending"
-            # Add blank line separator only when the repo summary had sections
-            # (gs=0). When clean (gs=2), __cz_git_repo_summary already emitted
-            # a blank line at line 79, so adding another would double it.
-            if test $gs -eq 0
-                echo ""
-            end
-            __cz_git_repo_section_header "pending" "35"
-            printf '%s\n' $pending
-        end
-        return 0
-
-    # ------------------------------------------------------------
-    # DIFF
-    # ------------------------------------------------------------
-    case diff d
-        echo "🏠 cz diff"
-        # Reverse diff direction so local additions appear as '+' (green).
-        # Exclude run scripts (R entries) — they have no meaningful diff content.
-        chezmoi diff --reverse --exclude=scripts
-        return 0
-
-    # ------------------------------------------------------------
-    # RECORD (safe + smart)
-    # ------------------------------------------------------------
-    case record r
-        echo "💾 cz record"
-
-        set modified (__cz_modified_files)
-        if test (count $modified) -gt 0
-            __cz_import_changes
-        end
-
-        set deleted (__cz_deleted_files)
-
-        if test (count $deleted) -gt 0
-            echo ""
-            echo (__cz_wide_emoji "⚠️")"Deleted files detected (not auto-handled in record):"
-            for f in $deleted
-                echo "  - $f"
-            end
-            echo "Run 'cz add' if you want to process deletions."
-        end
-
-        # check if anything actually staged in git
-        if not chezmoi git -- status --porcelain | string length -q
-            echo (__cz_wide_emoji "ℹ️")"Nothing to record"
+            echo "🏆 Add complete"
             return 0
-        end
 
-        set msg (string join ' ' $argv[2..-1])
-        if test -z "$msg"
-            set msg "Update dotfiles"
-        end
+            # ------------------------------------------------------------
+            # BACKTRACK (repo → home, single file)
+            # ------------------------------------------------------------
+        case backtrack b
+            set file $argv[2]
 
-        chezmoi git -- add -A
-        chezmoi git -- commit -m "$msg"
+            if test -z "$file"
+                echo "Usage: cz backtrack <file>"
+                return 1
+            end
 
-        echo "🏆 Recorded"
-        return 0
+            echo "⏪ cz backtrack — restoring $file"
+            chezmoi apply "$file"
+            echo "🏆 Restored"
+            return 0
 
-    # ------------------------------------------------------------
-    # PUSH (repo → remote)
-    # ------------------------------------------------------------
-    case push p
-        echo "🌐 cz push"
-        chezmoi git -- push
-        echo "🚀 Pushed"
-        return 0
+            # ------------------------------------------------------------
+            # STATUS
+            # ------------------------------------------------------------
+        case status s
+            echo "🏠 cz status"
+            __cz_git_repo_summary
+            set -l gs $status
+            switch $gs
+                case 0
+                case 2
+                    # clean — no separator needed before pending heading
+                case 1
+                    return 1
+                case '*'
+                    return $gs
+            end
+            # Only show pending section when there are actual pending files
+            set -l pending (__cz_status_without_template_sources)
+            if test -n "$pending"
+                # Add blank line separator only when the repo summary had sections
+                # (gs=0). When clean (gs=2), __cz_git_repo_summary already emitted
+                # a blank line at line 79, so adding another would double it.
+                if test $gs -eq 0
+                    echo ""
+                end
+                __cz_git_repo_section_header pending 35
+                printf '%s\n' $pending
+            end
+            return 0
 
-    # ------------------------------------------------------------
-    # FULL (full pipeline)
-    # ------------------------------------------------------------
-    case full f
-        echo "🏠 cz full"
+            # ------------------------------------------------------------
+            # DIFF
+            # ------------------------------------------------------------
+        case diff d
+            echo "🏠 cz diff"
+            # Reverse diff direction so local additions appear as '+' (green).
+            # Exclude run scripts (R entries) — they have no meaningful diff content.
+            chezmoi diff --reverse --exclude=scripts
+            return 0
 
-        set msg (string join ' ' $argv[2..-1])
-        if test -z "$msg"
-            set msg "Full sync dotfiles"
-        end
+            # ------------------------------------------------------------
+            # RECORD (safe + smart)
+            # ------------------------------------------------------------
+        case record r
+            echo "💾 cz record"
 
-        cz update
-        cz add
-        cz record "$msg"
-        cz push
+            set modified (__cz_modified_files)
+            if test (count $modified) -gt 0
+                __cz_import_changes
+            end
 
-        echo "🏆 Full sync complete"
-        return 0
+            set deleted (__cz_deleted_files)
 
-    # ------------------------------------------------------------
-    # GIT (cd into chezmoi source)
-    # ------------------------------------------------------------
-    case git g
-        chezmoi cd
-        return 0
+            if test (count $deleted) -gt 0
+                echo ""
+                echo (__cz_wide_emoji "⚠️")"Deleted files detected (not auto-handled in record):"
+                for f in $deleted
+                    echo "  - $f"
+                end
+                echo "Run 'cz add' if you want to process deletions."
+            end
 
-    # ------------------------------------------------------------
-    # CLEAN (HOME leftovers after source file deleted in git)
-    # ------------------------------------------------------------
-    case clean c
-        echo "🧹 cz clean — stale targets from git delete history"
-        __cz_clean
-        return $status
+            # check if anything actually staged in git
+            if not chezmoi git -- status --porcelain | string length -q
+                echo (__cz_wide_emoji "ℹ️")"Nothing to record"
+                return 0
+            end
 
-    # ------------------------------------------------------------
-    # INIT (bootstrap chezmoi from GitHub)
-    # ------------------------------------------------------------
-    case init i
-        set -l username $argv[2]
+            set msg (string join ' ' $argv[2..-1])
+            if test -z "$msg"
+                set msg "Update dotfiles"
+            end
 
-        if test -z "$username"
-            echo "Usage: cz init <github-username>"
+            chezmoi git -- add -A
+            chezmoi git -- commit -m "$msg"
+
+            echo "🏆 Recorded"
+            return 0
+
+            # ------------------------------------------------------------
+            # PUSH (repo → remote)
+            # ------------------------------------------------------------
+        case push p
+            echo "🌐 cz push"
+            chezmoi git -- push
+            echo "🚀 Pushed"
+            return 0
+
+            # ------------------------------------------------------------
+            # FULL (full pipeline)
+            # ------------------------------------------------------------
+        case full f
+            echo "🏠 cz full"
+
+            set msg (string join ' ' $argv[2..-1])
+            if test -z "$msg"
+                set msg "Full sync dotfiles"
+            end
+
+            cz update
+            cz add
+            cz record "$msg"
+            cz push
+
+            echo "🏆 Full sync complete"
+            return 0
+
+            # ------------------------------------------------------------
+            # GIT (cd into chezmoi source)
+            # ------------------------------------------------------------
+        case git g
+            chezmoi cd
+            return 0
+
+            # ------------------------------------------------------------
+            # CLEAN (HOME leftovers after source file deleted in git)
+            # ------------------------------------------------------------
+        case clean c
+            echo "🧹 cz clean — stale targets from git delete history"
+            __cz_clean
+            return $status
+
+            # ------------------------------------------------------------
+            # INIT (bootstrap chezmoi from GitHub)
+            # ------------------------------------------------------------
+        case init i
+            set -l username $argv[2]
+
+            if test -z "$username"
+                echo "Usage: cz init <github-username>"
+                return 1
+            end
+
+            echo "🚀 cz init — bootstrapping chezmoi from github.com/$username"
+            set -l _cz_init_script (curl -fsLS https://get.chezmoi.io | string collect)
+            sh -c "$_cz_init_script" -- init --apply "$username"
+            return $status
+
+            # ------------------------------------------------------------
+            # UNKNOWN
+            # ------------------------------------------------------------
+        case '*'
+            echo "Unknown command: cz $cmd"
+            echo "Run: cz help"
             return 1
-        end
-
-        echo "🚀 cz init — bootstrapping chezmoi from github.com/$username"
-        set -l _cz_init_script (curl -fsLS https://get.chezmoi.io | string collect)
-        sh -c "$_cz_init_script" -- init --apply "$username"
-        return $status
-
-    # ------------------------------------------------------------
-    # UNKNOWN
-    # ------------------------------------------------------------
-    case '*'
-        echo "Unknown command: cz $cmd"
-        echo "Run: cz help"
-        return 1
     end
 end
