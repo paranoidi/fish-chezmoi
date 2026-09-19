@@ -3,7 +3,11 @@ function __cz_modified_files
 end
 
 function __cz_deleted_files
-    chezmoi status | awk '$1 ~ /^D/ {print $2}'
+    # Column 1 = actually deleted locally (vs column 2 = will be deleted by
+    # `chezmoi apply`, e.g. a remove_ entry pulled in from source). Only
+    # column 1 means "forget" makes sense; awk's default field splitting
+    # can't tell the columns apart, so index into the fixed-width code.
+    chezmoi status | awk 'substr($0, 1, 1) == "D" {print substr($0, 4)}'
 end
 
 function __cz_is_template_source --argument-names source_path
@@ -373,7 +377,7 @@ function __cz_import_changes
         end
 
         echo "💾 $f"
-        chezmoi add "$HOME/$f"
+        chezmoi add --secrets=ignore "$HOME/$f"
     end
 
     return 0
@@ -443,7 +447,7 @@ function cz
 
             if test -n "$file"
                 echo "🏠 cz add - Adding $file"
-                chezmoi add "$file"
+                chezmoi add --secrets=ignore "$file"
                 echo "🏆 Add complete"
                 return 0
             end
