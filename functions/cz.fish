@@ -14,6 +14,10 @@ function __cz_is_template_source --argument-names source_path
     string match -rq '(^|\\.)tmpl($|\\.)' -- "$source_path"
 end
 
+function __cz_is_encrypted_source --argument-names source_path
+    string match -rq '(^|/)encrypted_[^/]*$' -- "$source_path"
+end
+
 function __cz_wide_emoji --argument-names emoji
     if set -q TMUX
         echo -n "$emoji "
@@ -376,8 +380,13 @@ function __cz_import_changes
             continue
         end
 
+        set -l encrypt_flag
+        if __cz_is_encrypted_source "$source_path"
+            set encrypt_flag --encrypt
+        end
+
         echo "💾 $f"
-        chezmoi add --secrets=ignore "$HOME/$f"
+        chezmoi add --secrets=ignore $encrypt_flag "$HOME/$f"
     end
 
     return 0
@@ -446,8 +455,13 @@ function cz
             set file $argv[2]
 
             if test -n "$file"
+                set -l encrypt_flag
+                if __cz_is_encrypted_source (chezmoi source-path "$file" 2>/dev/null)
+                    set encrypt_flag --encrypt
+                end
+
                 echo "🏠 cz add - Adding $file"
-                chezmoi add --secrets=ignore "$file"
+                chezmoi add --secrets=ignore $encrypt_flag "$file"
                 echo "🏆 Add complete"
                 return 0
             end
