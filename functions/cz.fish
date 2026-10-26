@@ -514,6 +514,17 @@ function cz
             end
 
             echo "⏪ cz backtrack — restoring $file"
+
+            # Discard all local changes in the source (conflict markers
+            # included) back to HEAD, so apply writes exactly the repo state.
+            set source_path (chezmoi source-path "$file" 2>/dev/null)
+            if test $status -eq 0
+                chezmoi git -- restore --staged --worktree --source=HEAD -- "$source_path" 2>/dev/null
+                if chezmoi git -- stash list 2>/dev/null | string match -q 'autostash'
+                    echo (__cz_wide_emoji "ℹ️")"Leftover autostash from a conflicted update — drop it with: git stash drop"
+                end
+            end
+
             chezmoi apply "$file"
             echo "🏆 Restored"
             return 0
