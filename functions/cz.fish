@@ -437,7 +437,18 @@ function cz
         case update u
             echo "🌐 cz update"
 
-            chezmoi update
+            # Pull only — defer apply so conflicts are resolved in the source
+            # before they ever reach $HOME.
+            chezmoi update --apply=false
+
+            set -l unmerged (chezmoi git -- diff --name-only --diff-filter=U 2>/dev/null)
+            if test -n "$unmerged"
+                echo "🚫 Conflicts in chezmoi source — NOT applying to \$HOME:"
+                printf '   %s\n' $unmerged
+                echo "   Resolve them in the source repo first, then: chezmoi apply"
+                return 1
+            end
+
             chezmoi apply
 
             for hook in (functions --all | string match '__cz_hook_*')
